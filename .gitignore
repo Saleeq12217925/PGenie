@@ -34,3 +34,6 @@ ai-service/model/*.joblib
 
 # Claude Code local data
 .claude/
+
+# Python Virtual Environment
+venv/
