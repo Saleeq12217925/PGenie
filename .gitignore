@@ -1,0 +1,36 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.sw?
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Build output
+dist/
+dist-ssr/
+
+# Node
+node_modules/
+
+# Environment overrides (keep base .env committed for local dev)
+.env.local
+.env.*.local
+
+# Uploaded files (runtime)
+server/uploads/*
+!server/uploads/.gitkeep
+
+# AI model cache (rebuilt on first run)
+ai-service/model/*.joblib
+
+# Claude Code local data
+.claude/
