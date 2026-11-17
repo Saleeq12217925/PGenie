@@ -5,6 +5,9 @@ import { Server as SocketServer } from 'socket.io';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import path from 'node:path';
+import mongoose from 'mongoose';
+import { servePhoto, usesMongoPhotos } from './utils/photoStorage.js';
 import { env } from './config/env.js';
 import { connectDB } from './config/db.js';
 import { initChatSocket } from './socket/chatSocket.js';
@@ -19,6 +22,9 @@ import reviewsRouter from './routes/reviews.js';
 const app = express();
 const httpServer = createServer(app);
 
+// The Render deployment has one trusted reverse proxy in front of Express.
+if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
+
 // Socket.io
 const io = new SocketServer(httpServer, {
   cors: { origin: env.clientUrl, credentials: true },
@@ -26,7 +32,11 @@ const io = new SocketServer(httpServer, {
 initChatSocket(io);
 
 // Security headers
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: { connectSrc: ["'self'", 'https://nominatim.openstreetmap.org'] },
+  },
+}));
 
 // CORS — allow only the frontend origin, support credentials (cookies)
 app.use(cors({ origin: env.clientUrl, credentials: true }));
@@ -36,7 +46,23 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Static file serving for uploads
-app.use('/uploads', express.static('uploads'));
+if (usesMongoPhotos()) app.get('/uploads/:filename', servePhoto);
+else app.use('/uploads', express.static('uploads'));
+
+app.get('/api/health', async (_req, res) => {
+  try {
+    await mongoose.connection.db.admin().ping();
+    if (process.env.CHECK_AI_HEALTH === 'true') {
+      const response = await fetch(`${process.env.AI_SERVICE_URL}/health`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!response.ok) throw new Error('AI service unavailable');
+    }
+    res.json({ status: 'ok' });
+  } catch {
+    res.status(503).json({ status: 'unavailable' });
+  }
+});
 
 // Routes
 app.use('/api/auth', authRouter);
@@ -46,6 +72,16 @@ app.use('/api/admin', adminRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/reviews', reviewsRouter);
+
+// The free deployment serves the built SPA and API from one HTTPS origin.
+if (process.env.STATIC_DIR) {
+  const staticDir = path.resolve(process.env.STATIC_DIR);
+  app.use(express.static(staticDir));
+  app.get('*', (req, res, next) => {
+    if (/^\/(api|uploads|socket\.io)(\/|$)/.test(req.path)) return next();
+    res.sendFile(path.join(staticDir, 'index.html'));
+  });
+}
 
 // 404
 app.use((_req, res) => {

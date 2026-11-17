@@ -4,7 +4,9 @@ services:
     image: mongo:7
     restart: unless-stopped
     volumes:
-      - mongo_data:/data/db
+      - ./docker-data/mongodb:/data/db
+    ports:
+      - "27018:27017"
     networks:
       - pgenie
 
@@ -12,7 +14,7 @@ services:
     build: ./ai-service
     restart: unless-stopped
     volumes:
-      - ai_models:/app/model
+      - ./docker-data/ai_models:/app/models_data
       - ./ai-service:/app         # hot-reload Python source
     networks:
       - pgenie
@@ -36,7 +38,7 @@ services:
     volumes:
       - ./server:/app
       - server_nm:/app/node_modules
-      - uploads:/app/uploads
+      - ./docker-data/uploads:/app/uploads
     networks:
       - pgenie
 
@@ -58,9 +60,7 @@ services:
       - pgenie
 
 volumes:
-  mongo_data:
-  uploads:
-  ai_models:
+
   server_nm:
   client_nm:
 

@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from model.rent_model import RentPredictor
@@ -36,4 +37,4 @@ def health():
 
 
 if __name__ == '__main__':
-    app.run(port=8000, debug=True)
+    app.run(host='0.0.0.0', port=8000, debug=os.getenv('FLASK_DEBUG') == '1')

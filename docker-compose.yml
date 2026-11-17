@@ -4,7 +4,9 @@ services:
     image: mongo:7
     restart: unless-stopped
     volumes:
-      - mongo_data:/data/db
+      - ./docker-data/mongodb:/data/db
+    ports:
+      - "27017:27017"
     networks:
       - pgenie
 
@@ -12,7 +14,7 @@ services:
     build: ./ai-service
     restart: unless-stopped
     volumes:
-      - ai_models:/app/model   # persist trained .joblib files
+      - ./docker-data/ai_models:/app/models_data   # persist trained .joblib files
     networks:
       - pgenie
 
@@ -32,7 +34,7 @@ services:
       AI_SERVICE_URL: http://ai-service:8000
       NODE_ENV: production
     volumes:
-      - uploads:/app/uploads    # persist uploaded PG photos
+      - ./docker-data/uploads:/app/uploads    # persist uploaded PG photos
     networks:
       - pgenie
     ports:
@@ -48,10 +50,7 @@ services:
     networks:
       - pgenie
 
-volumes:
-  mongo_data:
-  uploads:
-  ai_models:
+
 
 networks:
   pgenie:

@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { authLimiter, loginLimiter } from '../middleware/rateLimiter.js';
+import { authLimiter, loginLimiter, mfaLimiter } from '../middleware/rateLimiter.js';
 import { validate } from '../middleware/validate.js';
 import { verifyToken } from '../middleware/auth.js';
 import { auditLog } from '../middleware/auditLogger.js';
-import { register, login, me, updateProfile, refresh, logout } from '../controllers/authController.js';
+import { register, login, verifyMfa, setupMfa, enableMfa, me, updateProfile, refresh, logout } from '../controllers/authController.js';
 
 const router = Router();
 
@@ -42,7 +42,19 @@ router.post(
   login,
 );
 
+router.post(
+  '/verify-mfa',
+  mfaLimiter,
+  body('tempToken').notEmpty().withMessage('Temp token is required.'),
+  body('token').isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits.'),
+  validate,
+  verifyMfa,
+);
+
 router.get('/me', verifyToken, me);
+
+router.get('/mfa/setup', verifyToken, setupMfa);
+router.post('/mfa/enable', verifyToken, mfaLimiter, enableMfa);
 
 router.post('/refresh', authLimiter, auditLog('TOKEN_REFRESH'), refresh);
 

@@ -18,7 +18,7 @@ function imageFilter(_req, file, cb) {
 }
 
 export const uploadPhotos = multer({
-  storage,
+  storage: process.env.PHOTO_STORAGE === 'mongodb' ? multer.memoryStorage() : storage,
   fileFilter: imageFilter,
   limits: { files: 5, fileSize: 5 * 1024 * 1024 }, // 5MB per file
 });

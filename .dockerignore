@@ -1,0 +1,22 @@
+# Root build context: send only application source and deployment files.
+*
+!client/
+!client/**
+!server/
+!server/**
+!ai-service/
+!ai-service/**
+!deploy/
+!deploy/**
+**/node_modules
+**/dist
+**/uploads
+**/.env
+**/.env.*
+**/venv
+**/.venv
+**/__pycache__
+**/*.pyc
+**/*.joblib
+**/*.log
+**/models_data

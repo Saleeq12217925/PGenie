@@ -36,6 +36,10 @@ export function LoginPage() {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/login', form);
+      if (data.mfaRequired) {
+        navigate('/verify-mfa', { replace: true, state: { tempToken: data.tempToken } });
+        return;
+      }
       setTokens(data.accessToken, data.user);
       navigate('/dashboard', { replace: true });
     } catch (err) {

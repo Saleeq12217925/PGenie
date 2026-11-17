@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth.js';
 import { LoginPage } from './pages/LoginPage.jsx';
 import { RegisterPage } from './pages/RegisterPage.jsx';
+import { VerifyMfaPage } from './pages/VerifyMfaPage.jsx';
 import { LandingPage } from './pages/LandingPage.jsx';
 import { ProtectedRoute } from './components/layout/ProtectedRoute.jsx';
 
@@ -59,6 +60,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
+      <Route path="/verify-mfa" element={<GuestRoute><VerifyMfaPage /></GuestRoute>} />
       <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
 
       {/* Dashboard — role-dispatched */}

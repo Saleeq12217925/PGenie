@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { User } from '../models/User.js';
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt.js';
+import { signAccessToken, signRefreshToken, signTempToken, verifyRefreshToken, verifyTempToken } from '../utils/jwt.js';
+import { encrypt, decrypt } from '../utils/crypto.js';
+import { generateMfaSecret, generateQrDataUrl, verifyTotp } from '../utils/mfa.js';
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -18,7 +20,7 @@ function clearRefreshCookie(res) {
 }
 
 function safeUser(user) {
-  return { id: user._id, name: user.name, email: user.email, role: user.role };
+  return { id: user._id, name: user.name, email: user.email, role: user.role, mfaEnabled: user.mfaEnabled };
 }
 
 // POST /api/auth/register
@@ -70,6 +72,12 @@ export async function login(req, res, next) {
 
     if (user.isActive === false) {
       return res.status(403).json({ success: false, message: 'Your account has been deactivated. Please contact support.' });
+    }
+
+    // If MFA is enabled, issue a short-lived temp token and require OTP
+    if (user.mfaEnabled && user.mfaSecret) {
+      const tempToken = signTempToken(user._id.toString());
+      return res.json({ success: true, mfaRequired: true, tempToken });
     }
 
     const accessToken = signAccessToken(user._id.toString(), user.role);
@@ -223,6 +231,57 @@ export async function logout(req, res, next) {
     await User.findByIdAndUpdate(req.user.id, { refreshTokenHash: null });
     clearRefreshCookie(res);
     res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/auth/mfa/setup
+export async function setupMfa(req, res, next) {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+    // Generate new secret
+    const { base32, otpauthUrl } = generateMfaSecret(user.email);
+
+    // Save the encrypted secret but DO NOT enable MFA yet
+    user.mfaSecret = encrypt(base32);
+    await user.save();
+
+    // Generate QR code data URL
+    const qrDataUrl = await generateQrDataUrl(otpauthUrl);
+
+    res.json({ success: true, qrDataUrl });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/auth/mfa/enable
+export async function enableMfa(req, res, next) {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ success: false, message: 'OTP token is required.' });
+
+    const user = await User.findById(req.user.id);
+    if (!user || !user.mfaSecret) {
+      return res.status(400).json({ success: false, message: 'MFA setup not initialized.' });
+    }
+
+    const base32 = decrypt(user.mfaSecret);
+    const valid = verifyTotp(base32, token);
+
+    if (!valid) {
+      return res.status(401).json({ success: false, message: 'Invalid authenticator code. Please try again.' });
+    }
+
+    // Enable MFA
+    user.mfaEnabled = true;
+    user.isVerified = true;
+    await user.save();
+
+    res.json({ success: true, message: 'MFA successfully enabled.', user: safeUser(user) });
   } catch (err) {
     next(err);
   }

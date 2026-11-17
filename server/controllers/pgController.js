@@ -1,5 +1,4 @@
-import fs from 'fs';
-import path from 'path';
+import { savePhotos, removePhoto, usesMongoPhotos } from '../utils/photoStorage.js';
 import { PGListing } from '../models/PGListing.js';
 
 // GET /api/pgs — search & filter
@@ -120,6 +119,8 @@ export async function deletePG(req, res) {
 
 // POST /api/pgs/:id/photos — upload photos
 export async function uploadPhotos(req, res) {
+  let saved = [];
+  let committed = false;
   try {
     const listing = await PGListing.findOne({ _id: req.params.id, owner: req.user.id });
     if (!listing) return res.status(404).json({ success: false, message: 'Listing not found.' });
@@ -127,12 +128,19 @@ export async function uploadPhotos(req, res) {
 
     const available = 5 - listing.photos.length;
     if (available <= 0) return res.status(400).json({ success: false, message: 'Maximum 5 photos per listing.' });
-    const filenames = req.files.slice(0, available).map((f) => f.filename);
-    listing.photos.push(...filenames);
+    saved = await savePhotos(req.files.slice(0, available));
+    listing.photos.push(...saved);
     await listing.save();
+    committed = true;
     res.json({ success: true, photos: listing.photos });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  } finally {
+    // Multer writes local files before the controller checks ownership/limits.
+    const discarded = usesMongoPhotos()
+      ? (committed ? [] : saved)
+      : (req.files || []).map((f) => f.filename).filter((name) => !committed || !saved.includes(name));
+    await Promise.allSettled(discarded.map(removePhoto));
   }
 }
 
@@ -150,8 +158,7 @@ export async function deletePhoto(req, res) {
     listing.photos = listing.photos.filter((p) => p !== filename);
     await listing.save();
 
-    const filePath = path.join(process.cwd(), 'uploads', filename);
-    fs.unlink(filePath, () => {});
+    await removePhoto(filename);
 
     res.json({ success: true, photos: listing.photos });
   } catch (err) {

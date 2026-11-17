@@ -34,3 +34,14 @@ ai-service/model/*.joblib
 
 # Claude Code local data
 .claude/
+
+# Local databases, Python environments, caches, and deployment secrets
+docker-data/
+venv/
+.venv/
+__pycache__/
+*.pyc
+ai-service/models_data/
+.env
+.env.production
+.env.deploy

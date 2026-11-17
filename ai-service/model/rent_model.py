@@ -5,7 +5,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), 'rent_model.joblib')
+MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', 'models_data', 'rent_model.joblib')
 
 FEATURES = ['location_score', 'amenities_count', 'room_type_encoded', 'occupancy_rate', 'market_trend_index']
 
@@ -32,9 +32,11 @@ class RentPredictor:
 
         self.pipeline = Pipeline([
             ('scaler', StandardScaler()),
-            ('rf', RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)),
+            ('rf', RandomForestRegressor(n_estimators=100, random_state=42,
+                                         n_jobs=int(os.getenv('MODEL_N_JOBS', '-1')))),
         ])
         self.pipeline.fit(X, y)
+        os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
         joblib.dump(self.pipeline, MODEL_PATH)
         print('[RentModel] Trained and saved.')
 

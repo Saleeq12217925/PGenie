@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth.js';
 import { useTheme } from '../../hooks/useTheme.js';
 import { Wordmark } from './Wordmark.jsx';
 import api from '../../lib/axios.js';
+import { OtpInput } from '../auth/OtpInput.jsx';
 
 // ── SVG Icons ──────────────────────────────────────────────────────────────────
 const IC = {
@@ -134,7 +135,7 @@ const ROLE_COLORS = {
 };
 
 export function AppShell({ children }) {
-  const { user, logout } = useAuth();
+  const { user, logout, refetchUser } = useAuth();
   const { dark, toggle: toggleTheme } = useTheme();
   const location = useLocation();
   const isMobile = useIsMobile();
@@ -144,6 +145,45 @@ export function AppShell({ children }) {
   const role = user?.role || 'tenant';
   const navItems = NAV_ITEMS[role] || NAV_ITEMS.tenant;
   const roleColor = ROLE_COLORS[role] || ROLE_COLORS.tenant;
+
+  const [mfaModalOpen, setMfaModalOpen] = useState(false);
+  const [qrCode, setQrCode] = useState('');
+  const [otp, setOtp] = useState('');
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [mfaError, setMfaError] = useState('');
+
+  async function handleSetupMfa() {
+    setMfaModalOpen(true);
+    setMfaLoading(true);
+    setMfaError('');
+    setQrCode('');
+    setOtp('');
+    try {
+      const { data } = await api.get('/auth/mfa/setup');
+      setQrCode(data.qrDataUrl);
+    } catch (err) {
+      setMfaError('Failed to initialize MFA setup.');
+    } finally {
+      setMfaLoading(false);
+    }
+  }
+
+  async function handleEnableMfa(e) {
+    e.preventDefault();
+    if (otp.length < 6) return;
+    setMfaLoading(true);
+    setMfaError('');
+    try {
+      await api.post('/auth/mfa/enable', { token: otp });
+      setMfaModalOpen(false);
+      await refetchUser();
+    } catch (err) {
+      setMfaError(err.response?.data?.message || 'Invalid code. Try again.');
+      setOtp('');
+    } finally {
+      setMfaLoading(false);
+    }
+  }
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
@@ -283,9 +323,94 @@ export function AppShell({ children }) {
         )}
 
         <div className="flex-1 overflow-x-hidden">
+          {user && !user.mfaEnabled && (
+            <div style={{
+              margin: '24px',
+              padding: '16px 20px',
+              background: 'rgba(245,158,11,0.08)',
+              border: '1px solid rgba(245,158,11,0.25)',
+              borderRadius: '12px',
+              textAlign: 'left',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              flexWrap: 'wrap'
+            }}>
+              <div>
+                <strong style={{ color: '#d97706', display: 'block', marginBottom: '4px', fontSize: '0.9rem' }}>Secure your account</strong>
+                <p style={{ color: 'var(--text)', fontSize: '0.85rem', margin: 0 }}>Two-factor authentication is not enabled.</p>
+              </div>
+              <button
+                onClick={handleSetupMfa}
+                style={{
+                  padding: '8px 16px',
+                  background: '#f59e0b',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+                onMouseEnter={(e) => e.target.style.background = '#d97706'}
+                onMouseLeave={(e) => e.target.style.background = '#f59e0b'}
+              >
+                Set up MFA
+              </button>
+            </div>
+          )}
           {children}
         </div>
       </div>
+
+      {mfaModalOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 24, zIndex: 9999
+        }}>
+          <div style={{
+            background: 'var(--surface)', padding: 32, borderRadius: 16, maxWidth: 400, width: '100%',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
+          }}>
+            <h2 style={{ fontSize: '1.25rem', marginBottom: 16, color: 'var(--text-h)', marginTop: 0 }}>Set up Two-Factor Auth</h2>
+
+            {mfaLoading && !qrCode ? (
+              <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" style={{ animation: 'spin 0.75s linear infinite', display: 'inline-block' }}>
+                  <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                  <path d="M12 2a10 10 0 0 1 10 10" />
+                </svg>
+              </div>
+            ) : qrCode ? (
+              <form onSubmit={handleEnableMfa} style={{ margin: 0 }}>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text)', marginBottom: 20, lineHeight: 1.5, marginTop: 0 }}>
+                  Scan this QR code with Google Authenticator or Authy, then enter the 6-digit code below.
+                </p>
+                <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                  <img src={qrCode} alt="MFA QR Code" style={{ width: 200, height: 200, display: 'inline-block', borderRadius: 8, background: '#fff', padding: 8, boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }} />
+                </div>
+                <div style={{ marginBottom: 24 }}>
+                  <OtpInput value={otp} onChange={setOtp} />
+                  {mfaError && <p style={{ color: '#ef4444', fontSize: '0.8rem', textAlign: 'center', marginTop: 12, marginBottom: 0 }}>{mfaError}</p>}
+                </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button type="button" onClick={() => setMfaModalOpen(false)} style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 12, color: 'var(--text)', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+                  <button type="submit" disabled={otp.length < 6 || mfaLoading} style={{ flex: 1, padding: '12px', background: 'var(--btn-accent)', border: 'none', borderRadius: 12, color: '#fff', cursor: (otp.length < 6 || mfaLoading) ? 'not-allowed' : 'pointer', fontWeight: 600, opacity: (otp.length < 6 || mfaLoading) ? 0.65 : 1 }}>Verify & Enable</button>
+                </div>
+              </form>
+            ) : (
+              <div>
+                <p style={{ color: '#ef4444', marginBottom: 24 }}>{mfaError}</p>
+                <button onClick={() => setMfaModalOpen(false)} style={{ width: '100%', padding: '12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, color: 'var(--text)', cursor: 'pointer', fontWeight: 600 }}>Close</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -8,6 +8,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     host: true,
+    watch: {
+      usePolling: true,
+    },
     proxy: {
       "/api":       { target: BACKEND, changeOrigin: true },
       "/uploads":   { target: BACKEND, changeOrigin: true },
